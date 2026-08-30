@@ -74,7 +74,7 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 - Banken erhöht nur die Gesamtpunkte der aktiven Person; Anzeige und aktive Person wechseln korrekt.
 - Alle automatisierten Tests bestehen und ein manueller Zwei-Personen-Durchlauf gelingt.
 
-**Status: TODO**
+**Status: DONE**
 
 ### Stufe 3: Bonus-, Aktionskarten und Rundenauswertung
 **Umfang:** Bonuskarten, Zweite Chance, Freeze mit Zielauswahl, Flip-7-Bonus, Rundenergebnis sowie Gleichstandsregel implementieren; Regeln in der UI dokumentieren. Jeden Effekt testgetrieben ergänzen.

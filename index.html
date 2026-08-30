@@ -4,12 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flip 7</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f4f1ea; color: #202020; }
+    main { max-width: 42rem; margin: 0 auto; padding: 1.5rem; }
+    .panel { background: #fff; border-radius: .75rem; padding: 1.25rem; box-shadow: 0 2px 8px #0002; }
+    .players, .cards { display: flex; flex-wrap: wrap; gap: .5rem; padding: 0; list-style: none; }
+    .players li, .card { border: 2px solid #244; border-radius: .5rem; padding: .5rem .75rem; background: #e8f1ef; }
+    .card { min-width: 3rem; text-align: center; font-size: 1.5rem; font-weight: bold; background: #fff9dc; }
+    label, input, select, button { display: block; font: inherit; }
+    label { margin-top: .75rem; }
+    input, select { box-sizing: border-box; width: 100%; padding: .5rem; }
+    button { margin-top: 1rem; padding: .65rem 1rem; cursor: pointer; }
+    button + button { margin-left: .5rem; }
+    .status { min-height: 1.5rem; font-weight: 600; }
+  </style>
 </head>
 <body>
-  <main>
-    <h1>Flip 7</h1>
-    <p>Das Spiel wird vorbereitet.</p>
-  </main>
+  <main id="app"></main>
   <script>
 /* GAME_ENGINE_START */
 const GameEngine = (() => {
@@ -22,6 +33,40 @@ const GameEngine = (() => {
       }
     }
     return deck;
+  }
+
+  function shuffle(deck, random = Math.random) {
+    const shuffled = [...deck];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(random() * (index + 1));
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+  }
+
+  function normalizePlayers(names) {
+    const usedNames = new Map();
+    return names.map((rawName, index) => {
+      const baseName = String(rawName).trim() || `Spieler ${index + 1}`;
+      const count = (usedNames.get(baseName) || 0) + 1;
+      usedNames.set(baseName, count);
+      return { id: `player-${index + 1}`, name: count === 1 ? baseName : `${baseName} ${count}` };
+    });
+  }
+
+  function startLocalGame(names, random = Math.random) {
+    const players = normalizePlayers(names);
+    if (players.length < 2 || players.length > 4) {
+      throw new Error('Eine lokale Partie benötigt zwei bis vier Personen.');
+    }
+    return {
+      ...createGameState(players),
+      phase: 'handoff',
+      deck: shuffle(buildDeck(), random),
+      round: createRoundState(players),
+      lastCard: null,
+      lastEvent: '',
+    };
   }
 
   function createGameState(players) {
@@ -82,13 +127,188 @@ const GameEngine = (() => {
     };
   }
 
-  return { buildDeck, createGameState, createRoundState, drawNumber, hasFlip7, calculateNumberPoints, bankPoints };
+  function activePlayerId(state) {
+    return state.players[state.activePlayerIndex].id;
+  }
+
+  function showTurn(state) {
+    if (state.phase !== 'handoff') throw new Error('Der Zug kann nur vom Übergabebildschirm gezeigt werden.');
+    return { ...state, phase: 'turn', lastCard: null, lastEvent: '' };
+  }
+
+  function allPlayersFinished(state) {
+    return state.players.every((player) => {
+      const roundPlayer = state.round.players[player.id];
+      return roundPlayer.banked || roundPlayer.busted;
+    });
+  }
+
+  function nextActivePlayerIndex(state) {
+    for (let offset = 1; offset <= state.players.length; offset += 1) {
+      const index = (state.activePlayerIndex + offset) % state.players.length;
+      const roundPlayer = state.round.players[state.players[index].id];
+      if (!roundPlayer.banked && !roundPlayer.busted) return index;
+    }
+    return state.activePlayerIndex;
+  }
+
+  function beginNextRound(state, random = Math.random) {
+    const roundStarterIndex = (state.roundStarterIndex + 1) % state.players.length;
+    return {
+      ...state,
+      roundStarterIndex,
+      activePlayerIndex: roundStarterIndex,
+      phase: 'handoff',
+      deck: shuffle(buildDeck(), random),
+      round: createRoundState(state.players),
+      lastCard: null,
+      lastEvent: 'Neue Runde.',
+    };
+  }
+
+  function advanceAfterPlayer(state, random = Math.random) {
+    if (allPlayersFinished(state)) return beginNextRound(state, random);
+    return { ...state, activePlayerIndex: nextActivePlayerIndex(state), phase: 'handoff', lastCard: null };
+  }
+
+  function drawActiveNumber(state, random = Math.random) {
+    if (state.phase !== 'turn') throw new Error('Eine Karte kann nur während eines Zuges aufgedeckt werden.');
+    const card = state.deck[0];
+    if (!card) throw new Error('Der Stapel ist leer.');
+    const playerId = activePlayerId(state);
+    const updatedRound = drawNumber(state.round, playerId, card.value);
+    const next = {
+      ...state,
+      deck: state.deck.slice(1),
+      round: updatedRound,
+      lastCard: card,
+      lastEvent: `Zahl ${card.value} aufgedeckt.`,
+    };
+    if (!updatedRound.players[playerId].busted) return next;
+    return advanceAfterPlayer({ ...next, lastEvent: 'Doppelte Zahl – bust!' }, random);
+  }
+
+  function bankActivePlayer(state, random = Math.random) {
+    if (state.phase !== 'turn') throw new Error('Punkte können nur während eines Zuges gesichert werden.');
+    const playerId = activePlayerId(state);
+    const banked = bankPoints(state, state.round, playerId);
+    const scored = { ...state, ...banked.game, round: banked.round, lastEvent: 'Punkte gesichert.' };
+    const winner = scored.players.find((player) => scored.scores[player.id] >= 200);
+    if (winner) return { ...scored, phase: 'gameOver', winnerId: winner.id };
+    return advanceAfterPlayer(scored, random);
+  }
+
+  return {
+    buildDeck, shuffle, normalizePlayers, startLocalGame, createGameState, createRoundState,
+    drawNumber, hasFlip7, calculateNumberPoints, bankPoints, showTurn, drawActiveNumber,
+    bankActivePlayer, beginNextRound,
+  };
 })();
 
 if (typeof module !== 'undefined') {
   module.exports = GameEngine;
 }
 /* GAME_ENGINE_END */
+  </script>
+  <script>
+    (() => {
+      const app = document.querySelector('#app');
+      let state = { phase: 'setup' };
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, (character) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+        }[character]));
+      }
+
+      function activePlayer() {
+        return state.players[state.activePlayerIndex];
+      }
+
+      function scoreList() {
+        return `<ul class="players">${state.players.map((player) =>
+          `<li>${escapeHtml(player.name)}: <strong>${state.scores[player.id]}</strong></li>`).join('')}</ul>`;
+      }
+
+      function renderSetup() {
+        const count = state.playerCount || 2;
+        app.innerHTML = `
+          <h1>Flip 7</h1>
+          <section class="panel" aria-labelledby="setup-title">
+            <h2 id="setup-title">Lokale Partie einrichten</h2>
+            <p>Für zwei bis vier Personen. Kartenhände bleiben beim Weitergeben verborgen.</p>
+            <label for="player-count">Anzahl Personen</label>
+            <select id="player-count"><option value="2"${count === 2 ? ' selected' : ''}>2</option><option value="3"${count === 3 ? ' selected' : ''}>3</option><option value="4"${count === 4 ? ' selected' : ''}>4</option></select>
+            ${Array.from({ length: count }, (_, index) => `<label for="name-${index}">Name Person ${index + 1}</label><input id="name-${index}" maxlength="30" value="${escapeHtml((state.names || [])[index] || '')}">`).join('')}
+            <button id="start-game" type="button">Partie starten</button>
+          </section>`;
+        document.querySelector('#player-count').addEventListener('change', (event) => {
+          state = { phase: 'setup', playerCount: Number(event.target.value), names: currentNames() };
+          render();
+        });
+        document.querySelector('#start-game').addEventListener('click', () => {
+          state = GameEngine.startLocalGame(currentNames());
+          render();
+        });
+      }
+
+      function currentNames() {
+        return Array.from(app.querySelectorAll('input')).map((input) => input.value);
+      }
+
+      function renderHandoff() {
+        app.innerHTML = `
+          <h1>Flip 7</h1>${scoreList()}
+          <section class="panel" aria-labelledby="handoff-title">
+            <h2 id="handoff-title">Übergabe</h2>
+            <p>Bitte gib das Gerät an <strong>${escapeHtml(activePlayer().name)}</strong>.</p>
+            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent || '')}</p>
+            <button id="show-turn" type="button">Zug anzeigen</button>
+          </section>`;
+        document.querySelector('#show-turn').addEventListener('click', () => { state = GameEngine.showTurn(state); render(); });
+      }
+
+      function renderTurn() {
+        const player = activePlayer();
+        const roundPlayer = state.round.players[player.id];
+        const hasCard = roundPlayer.seenNumbers.length > 0;
+        app.innerHTML = `
+          <h1>Flip 7</h1>${scoreList()}
+          <section class="panel" aria-labelledby="turn-title">
+            <h2 id="turn-title">${escapeHtml(player.name)} ist am Zug</h2>
+            <p>Rundenpunkte: <strong>${roundPlayer.roundPoints}</strong> · Reststapel: ${state.deck.length}</p>
+            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent || '')}</p>
+            <h3>Deine offenen Zahlen</h3>
+            <ul class="cards">${roundPlayer.seenNumbers.map((value) => `<li class="card">${value}</li>`).join('') || '<li>Noch keine Karte</li>'}</ul>
+            <button id="draw-card" type="button">${hasCard ? 'Weiter aufdecken' : 'Karte aufdecken'}</button>
+            ${hasCard ? '<button id="bank-points" type="button">Passen &amp; Punkte sichern</button>' : ''}
+          </section>`;
+        document.querySelector('#draw-card').addEventListener('click', () => { state = GameEngine.drawActiveNumber(state); render(); });
+        const bank = document.querySelector('#bank-points');
+        if (bank) bank.addEventListener('click', () => { state = GameEngine.bankActivePlayer(state); render(); });
+      }
+
+      function renderGameOver() {
+        const winner = state.players.find((player) => player.id === state.winnerId);
+        app.innerHTML = `
+          <h1>Flip 7</h1>${scoreList()}
+          <section class="panel" aria-labelledby="winner-title">
+            <h2 id="winner-title">${escapeHtml(winner.name)} gewinnt!</h2>
+            <p>Das Ziel von 200 Punkten ist erreicht.</p>
+            <button id="new-game" type="button">Neue Partie</button>
+          </section>`;
+        document.querySelector('#new-game').addEventListener('click', () => { state = { phase: 'setup' }; render(); });
+      }
+
+      function render() {
+        if (state.phase === 'setup') renderSetup();
+        else if (state.phase === 'handoff') renderHandoff();
+        else if (state.phase === 'turn') renderTurn();
+        else renderGameOver();
+      }
+
+      render();
+    })();
   </script>
 </body>
 </html>
