@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flip 7</title>
+</head>
+<body>
+  <main>
+    <h1>Flip 7</h1>
+    <p>Das Spiel wird vorbereitet.</p>
+  </main>
+  <script>
+/* GAME_ENGINE_START */
+const GameEngine = (() => {
+  function buildDeck() {
+    // Vereinfachte, nicht-offizielle Annäherung: Zahl n erscheint n + 1 Mal.
+    const deck = [];
+    for (let value = 0; value <= 12; value += 1) {
+      for (let copy = 0; copy <= value; copy += 1) {
+        deck.push({ type: 'number', value });
+      }
+    }
+    return deck;
+  }
+
+  function createGameState(players) {
+    return {
+      players,
+      scores: Object.fromEntries(players.map((player) => [player.id, 0])),
+      roundStarterIndex: 0,
+      activePlayerIndex: 0,
+      phase: 'setup',
+      winnerId: null,
+    };
+  }
+
+  function createRoundState(players) {
+    return {
+      players: Object.fromEntries(players.map((player) => [player.id, {
+        seenNumbers: [],
+        roundPoints: 0,
+        busted: false,
+        banked: false,
+      }])),
+    };
+  }
+
+  function drawNumber(round, playerId, value) {
+    const player = round.players[playerId];
+    const duplicate = player.seenNumbers.includes(value);
+    const nextPlayer = duplicate
+      ? { ...player, busted: true, roundPoints: 0 }
+      : {
+          ...player,
+          seenNumbers: [...player.seenNumbers, value],
+          roundPoints: player.roundPoints + value,
+        };
+
+    return { ...round, players: { ...round.players, [playerId]: nextPlayer } };
+  }
+
+  function hasFlip7(round, playerId) {
+    return round.players[playerId].seenNumbers.length === 7;
+  }
+
+  function calculateNumberPoints(cards) {
+    return cards.reduce((total, card) => total + card.value, 0);
+  }
+
+  function bankPoints(game, round, playerId) {
+    const player = round.players[playerId];
+    return {
+      game: {
+        ...game,
+        scores: { ...game.scores, [playerId]: game.scores[playerId] + player.roundPoints },
+      },
+      round: {
+        ...round,
+        players: { ...round.players, [playerId]: { ...player, banked: true } },
+      },
+    };
+  }
+
+  return { buildDeck, createGameState, createRoundState, drawNumber, hasFlip7, calculateNumberPoints, bankPoints };
+})();
+
+if (typeof module !== 'undefined') {
+  module.exports = GameEngine;
+}
+/* GAME_ENGINE_END */
+  </script>
+</body>
+</html>
