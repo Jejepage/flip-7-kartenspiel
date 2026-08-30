@@ -107,4 +107,4 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 - Die Änderungen sind in das konfigurierte GitHub-Remote gepusht und der Push wurde mit `git ls-remote` oder gleichwertig verifiziert.
 - GitHub Pages liefert die Seite erfolgreich aus; die veröffentlichte URL wurde geladen und getestet.
 
-**Status: TODO**
+**Status: DONE**
