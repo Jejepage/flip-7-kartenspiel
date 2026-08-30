@@ -96,7 +96,7 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 - Die Oberfläche bleibt bei ca. 320 px und Desktopbreite ohne horizontales Scrollen bedienbar.
 - `node --test` besteht; manueller Tastatur- und Mobil-Smoke-Test ist dokumentiert.
 
-**Status: TODO**
+**Status: DONE**
 
 ### Stufe 5: Unabhängiger Test und GitHub-Pages-Veröffentlichung
 **Umfang:** Einen unabhängigen Tester gegen die Akzeptanzkriterien prüfen lassen, Fehler beheben, die GitHub-Pages-Einstellung gemäß dem realen Remote konfigurieren und die Live-Seite prüfen.

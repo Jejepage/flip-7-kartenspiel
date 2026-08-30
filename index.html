@@ -5,18 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flip 7</title>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; background: #f4f1ea; color: #202020; }
-    main { max-width: 42rem; margin: 0 auto; padding: 1.5rem; }
-    .panel { background: #fff; border-radius: .75rem; padding: 1.25rem; box-shadow: 0 2px 8px #0002; }
+    :root { color-scheme: light; --ink: #16232b; --surface: #ffffff; --page: #edf2f1; --accent: #075a67; --accent-dark: #043e48; --line: #42616a; --warm: #fff3bd; --focus: #b64500; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; min-width: 0; background: var(--page); color: var(--ink); line-height: 1.5; }
+    main { width: min(100%, 70rem); margin: 0 auto; padding: clamp(1rem, 4vw, 2rem); overflow-wrap: anywhere; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0; font-size: clamp(1.75rem, 5vw, 2.5rem); }
+    h2 { margin-top: 0; }
+    .app-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+    .panel { background: var(--surface); border: 1px solid #bdcdd0; border-radius: .75rem; padding: clamp(1rem, 4vw, 1.5rem); box-shadow: 0 2px 8px #0002; }
     .players, .cards { display: flex; flex-wrap: wrap; gap: .5rem; padding: 0; list-style: none; }
-    .players li, .card { border: 2px solid #244; border-radius: .5rem; padding: .5rem .75rem; background: #e8f1ef; }
-    .card { min-width: 3rem; text-align: center; font-size: 1.5rem; font-weight: bold; background: #fff9dc; }
+    .players li, .card { border: 2px solid var(--line); border-radius: .5rem; padding: .5rem .75rem; background: #e7f2ef; }
+    .card { min-width: 3rem; text-align: center; font-size: 1.5rem; font-weight: 700; background: var(--warm); }
     label, input, select, button { display: block; font: inherit; }
-    label { margin-top: .75rem; }
-    input, select { box-sizing: border-box; width: 100%; padding: .5rem; }
-    button { margin-top: 1rem; padding: .65rem 1rem; cursor: pointer; }
+    label { margin-top: .9rem; font-weight: 650; }
+    input, select { width: 100%; min-height: 2.75rem; padding: .5rem; border: 2px solid var(--line); border-radius: .35rem; background: #fff; color: var(--ink); }
+    button { min-height: 2.75rem; margin-top: 1rem; padding: .6rem 1rem; border: 2px solid var(--accent-dark); border-radius: .35rem; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
     button + button { margin-left: .5rem; }
-    .status { min-height: 1.5rem; font-weight: 600; }
+    button.secondary { background: #fff; color: var(--accent-dark); }
+    button:hover { background: var(--accent-dark); }
+    button.secondary:hover { background: #dcebea; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, [data-focus]:focus { outline: 4px solid var(--focus); outline-offset: 3px; }
+    .status { min-height: 1.5rem; padding: .5rem .75rem; border-left: 4px solid var(--accent); background: #e7f2ef; font-weight: 700; }
+    details { margin: 1rem 0; border: 1px solid #8aa2a7; border-radius: .5rem; background: #fff; padding: .5rem .75rem; }
+    summary { cursor: pointer; font-weight: 700; }
+    @media (max-width: 360px) { main { padding: .75rem; } .panel { border-radius: .5rem; } button { width: 100%; } button + button { margin-left: 0; } .players li, .card { max-width: 100%; } }
   </style>
 </head>
 <body>
@@ -82,6 +95,10 @@ const GameEngine = (() => {
       phase: 'setup',
       winnerId: null,
     };
+  }
+
+  function resetLocalGame() {
+    return { phase: 'setup', playerCount: 2, names: [] };
   }
 
   function createRoundState(players) {
@@ -163,6 +180,12 @@ const GameEngine = (() => {
 
   function activePlayerId(state) {
     return state.players[state.activePlayerIndex].id;
+  }
+
+  function handoffStatusMessage(state) {
+    const nextPlayer = state.players[state.activePlayerIndex].name;
+    const turnChange = `Zugwechsel: ${nextPlayer} ist als Nächstes am Zug.`;
+    return state.lastEvent ? `${state.lastEvent} ${turnChange}` : turnChange;
   }
 
   function showTurn(state) {
@@ -281,8 +304,8 @@ const GameEngine = (() => {
   }
 
   return {
-    buildDeck, shuffle, normalizePlayers, startLocalGame, createGameState, createRoundState,
-    drawNumber, grantSecondChance, hasFlip7, calculateNumberPoints, bankPoints, eligibleFreezeTargets, freezePlayer, showTurn, drawActiveCard, drawActiveNumber,
+    buildDeck, shuffle, normalizePlayers, startLocalGame, createGameState, resetLocalGame, createRoundState,
+    drawNumber, grantSecondChance, hasFlip7, calculateNumberPoints, bankPoints, eligibleFreezeTargets, freezePlayer, showTurn, handoffStatusMessage, drawActiveCard, drawActiveNumber,
     bankActivePlayer, finishRound, beginNextRound,
   };
 })();
@@ -313,15 +336,23 @@ if (typeof module !== 'undefined') {
       }
 
       function rules() {
-        return `<details><summary>Regeln &amp; Hilfe</summary><p>Zahlen bringen ihren Wert. Eine doppelte eigene Zahl führt zu 0 Rundenpunkten; Zweite Chance neutralisiert genau ein solches Duplikat. +2 bis +10 erhöhen die Rundenpunkte. Bei sieben verschiedenen Zahlen endet die Runde mit 15 Flip-7-Bonuspunkten. Freeze lässt eine gewählte andere Person ihre aktuellen Rundenpunkte sichern. Bei 200 gewinnt nur eine allein führende Person.</p></details>`;
+        return `<details><summary>Regeln und Hilfe</summary><p>Zahlen bringen ihren Wert. Eine doppelte eigene Zahl führt zu 0 Rundenpunkten; Zweite Chance neutralisiert genau ein solches Duplikat. +2 bis +10 erhöhen die Rundenpunkte. Bei sieben verschiedenen Zahlen endet die Runde mit 15 Flip-7-Bonuspunkten. Freeze lässt eine gewählte andere Person ihre aktuellen Rundenpunkte sichern. Bei 200 gewinnt nur eine allein führende Person.</p></details>`;
+      }
+
+      function pageHeader() {
+        return `<header class="app-header"><h1>Flip 7</h1>${state.phase === 'setup' ? '' : '<button id="reset-game" class="secondary" type="button">Partie zurücksetzen</button>'}</header>${rules()}`;
+      }
+
+      function statusMessage(fallback) {
+        return state.lastEvent || fallback;
       }
 
       function renderSetup() {
         const count = state.playerCount || 2;
         app.innerHTML = `
-          <h1>Flip 7</h1>${rules()}
+          ${pageHeader()}
           <section class="panel" aria-labelledby="setup-title">
-            <h2 id="setup-title">Lokale Partie einrichten</h2>
+            <h2 id="setup-title" tabindex="-1" data-focus>Lokale Partie einrichten</h2>
             <p>Für zwei bis vier Personen. Kartenhände bleiben beim Weitergeben verborgen.</p>
             <label for="player-count">Anzahl Personen</label>
             <select id="player-count"><option value="2"${count === 2 ? ' selected' : ''}>2</option><option value="3"${count === 3 ? ' selected' : ''}>3</option><option value="4"${count === 4 ? ' selected' : ''}>4</option></select>
@@ -330,7 +361,7 @@ if (typeof module !== 'undefined') {
           </section>`;
         document.querySelector('#player-count').addEventListener('change', (event) => {
           state = { phase: 'setup', playerCount: Number(event.target.value), names: currentNames() };
-          render();
+          render(false);
         });
         document.querySelector('#start-game').addEventListener('click', () => {
           state = GameEngine.startLocalGame(currentNames());
@@ -344,11 +375,11 @@ if (typeof module !== 'undefined') {
 
       function renderHandoff() {
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}${rules()}
+          ${pageHeader()}${scoreList()}
           <section class="panel" aria-labelledby="handoff-title">
-            <h2 id="handoff-title">Übergabe</h2>
+            <h2 id="handoff-title" tabindex="-1" data-focus>Übergabe</h2>
             <p>Bitte gib das Gerät an <strong>${escapeHtml(activePlayer().name)}</strong>.</p>
-            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent || '')}</p>
+            <p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(GameEngine.handoffStatusMessage(state))}</p>
             <button id="show-turn" type="button">Zug anzeigen</button>
           </section>`;
         document.querySelector('#show-turn').addEventListener('click', () => { state = GameEngine.showTurn(state); render(); });
@@ -359,13 +390,13 @@ if (typeof module !== 'undefined') {
         const roundPlayer = state.round.players[player.id];
         const hasCard = roundPlayer.roundPoints > 0 || state.lastCard;
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}${rules()}
+          ${pageHeader()}${scoreList()}
           <section class="panel" aria-labelledby="turn-title">
-            <h2 id="turn-title">${escapeHtml(player.name)} ist am Zug</h2>
+            <h2 id="turn-title" tabindex="-1" data-focus>${escapeHtml(player.name)} ist am Zug</h2>
             <p>Rundenpunkte: <strong>${roundPlayer.roundPoints}</strong> · Reststapel: ${state.deck.length}</p>
-            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent || '')}</p>
+            <p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(statusMessage(`${player.name} ist am Zug.`))}</p>
             <h3>Deine offenen Zahlen</h3>
-            <ul class="cards">${roundPlayer.seenNumbers.map((value) => `<li class="card">${value}</li>`).join('') || '<li>Noch keine Karte</li>'}</ul>
+            <ul class="cards" aria-label="Offene Zahlen von ${escapeHtml(player.name)}">${roundPlayer.seenNumbers.map((value) => `<li class="card" aria-label="Zahlenkarte ${value}">${value}</li>`).join('') || '<li>Noch keine Karte</li>'}</ul>
             <button id="draw-card" type="button">${hasCard ? 'Weiter aufdecken' : 'Karte aufdecken'}</button>
             ${hasCard ? '<button id="bank-points" type="button">Passen &amp; Punkte sichern</button>' : ''}
           </section>`;
@@ -377,10 +408,10 @@ if (typeof module !== 'undefined') {
       function renderFreezeTarget() {
         const targets = GameEngine.eligibleFreezeTargets(state);
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}${rules()}
+          ${pageHeader()}${scoreList()}
           <section class="panel" aria-labelledby="freeze-title">
-            <h2 id="freeze-title">Freeze-Ziel wählen</h2>
-            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent)}</p>
+            <h2 id="freeze-title" tabindex="-1" data-focus>Freeze-Ziel wählen</h2>
+            <p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(statusMessage('Freeze: Wähle eine Zielperson.'))}</p>
             <label for="freeze-target">Andere Person, deren aktuelle Rundenpunkte gesichert werden</label>
             <select id="freeze-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)} (${state.round.players[player.id].roundPoints} Punkte)</option>`).join('')}</select>
             <button id="confirm-freeze" type="button">Freeze ausführen</button>
@@ -393,10 +424,10 @@ if (typeof module !== 'undefined') {
 
       function renderRoundResult() {
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}${rules()}
+          ${pageHeader()}${scoreList()}
           <section class="panel" aria-labelledby="round-title">
-            <h2 id="round-title">Rundenergebnis</h2>
-            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent || 'Runde beendet.')}</p>
+            <h2 id="round-title" tabindex="-1" data-focus>Rundenergebnis</h2>
+            <p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(statusMessage('Runde beendet.'))}</p>
             <ul class="players">${state.players.map((player) => `<li>${escapeHtml(player.name)}: ${state.round.players[player.id].busted ? 'bust (0)' : `${state.round.players[player.id].roundPoints} Rundenpunkte`}</li>`).join('')}</ul>
             <p>Die nächste Runde beginnt bei ${escapeHtml(state.players[(state.roundStarterIndex + 1) % state.players.length].name)}.</p>
             <button id="next-round" type="button">Nächste Runde</button>
@@ -407,22 +438,26 @@ if (typeof module !== 'undefined') {
       function renderGameOver() {
         const winner = state.players.find((player) => player.id === state.winnerId);
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}${rules()}
+          ${pageHeader()}${scoreList()}
           <section class="panel" aria-labelledby="winner-title">
-            <h2 id="winner-title">${escapeHtml(winner.name)} gewinnt!</h2>
+            <h2 id="winner-title" tabindex="-1" data-focus>${escapeHtml(winner.name)} gewinnt!</h2>
             <p>Das Ziel von 200 Punkten ist erreicht.</p>
             <button id="new-game" type="button">Neue Partie</button>
           </section>`;
-        document.querySelector('#new-game').addEventListener('click', () => { state = { phase: 'setup' }; render(); });
+        document.querySelector('#new-game').addEventListener('click', () => { state = GameEngine.resetLocalGame(); render(); });
       }
 
-      function render() {
+      function render(moveFocus = true) {
         if (state.phase === 'setup') renderSetup();
         else if (state.phase === 'handoff') renderHandoff();
         else if (state.phase === 'turn') renderTurn();
         else if (state.phase === 'freezeTarget') renderFreezeTarget();
         else if (state.phase === 'roundResult') renderRoundResult();
         else renderGameOver();
+
+        const reset = document.querySelector('#reset-game');
+        if (reset) reset.addEventListener('click', () => { state = GameEngine.resetLocalGame(); render(); });
+        if (moveFocus) document.querySelector('[data-focus]')?.focus();
       }
 
       render();

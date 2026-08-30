@@ -175,6 +175,19 @@ test('bankActivePlayer adds active points then hands off to the next player', ()
   assert.equal(next.phase, 'handoff');
 });
 
+test('handoff live status announces both the bank or bust event and the next player', () => {
+  const { startLocalGame, showTurn, drawActiveNumber, bankActivePlayer, handoffStatusMessage } = loadEngine();
+  const bankStart = { ...startLocalGame(['Ada', 'Bert']), deck: [{ type: 'number', value: 5 }] };
+  const afterBank = bankActivePlayer(drawActiveNumber(showTurn(bankStart)));
+  const bustStart = { ...startLocalGame(['Ada', 'Bert']), deck: [{ type: 'number', value: 4 }, { type: 'number', value: 4 }] };
+  const afterBust = drawActiveNumber(drawActiveNumber(showTurn(bustStart)));
+
+  assert.equal(afterBank.phase, 'handoff');
+  assert.equal(handoffStatusMessage(afterBank), 'Punkte gesichert. Zugwechsel: Bert ist als Nächstes am Zug.');
+  assert.equal(afterBust.phase, 'handoff');
+  assert.equal(handoffStatusMessage(afterBust), 'Doppelte Zahl – bust! Zugwechsel: Bert ist als Nächstes am Zug.');
+});
+
 test('drawing a bonus card adds its printed points and keeps the turn playable', () => {
   const { startLocalGame, showTurn, drawActiveCard } = loadEngine();
   const starting = { ...startLocalGame(['Ada', 'Bert']), deck: [{ type: 'bonus', points: 6, label: '+6' }] };
@@ -256,4 +269,14 @@ test('a sole leader at 200 wins when the round finishes', () => {
   assert.equal(finished.phase, 'gameOver');
   assert.equal(finished.winnerId, 'player-1');
   assert.equal(finished.scores['player-1'], 200);
+});
+
+test('resetLocalGame always returns a safe two-player setup state without prior game data', () => {
+  const { startLocalGame, resetLocalGame } = loadEngine();
+  const activeGame = startLocalGame(['Ada', 'Bert', 'Cem']);
+
+  const reset = resetLocalGame(activeGame);
+  assert.equal(reset.phase, 'setup');
+  assert.equal(reset.playerCount, 2);
+  assert.deepEqual(Array.from(reset.names), []);
 });
