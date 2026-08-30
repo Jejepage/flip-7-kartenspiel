@@ -1,6 +1,6 @@
 # Projektstatus
 
-- **Aktuelle Stufe:** 3
+- **Aktuelle Stufe:** 4
 - **Status:** Git
-- **Letzte erfolgreich abgeschlossene Stufe:** 2
-- **Nächste konkrete Aktion:** Den für Stufe 2 unabhängig geprüften Stand committen, zu GitHub pushen und die Remote-SHA prüfen; danach Stufe 3 beginnen.
+- **Letzte erfolgreich abgeschlossene Stufe:** 3
+- **Nächste konkrete Aktion:** Den für Stufe 3 unabhängig geprüften Stand committen, zu GitHub pushen und die Remote-SHA prüfen; danach Stufe 4 beginnen.

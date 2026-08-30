@@ -85,7 +85,7 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 - Freeze bankt das aktuelle Ergebnis der gewählten anderen Person; Zweite Chance neutralisiert genau ein Zahlen-Duplikat.
 - Bei mehreren Personen mit mindestens 200 Punkten gewinnt erst eine allein führende Person.
 
-**Status: TODO**
+**Status: DONE**
 
 ### Stufe 4: Zugängliche, responsive Fertigstellung
 **Umfang:** Layout, Kartenvisualisierung, Hilfedialog/-bereich, Fokusführung, Live-Status, Kontrast und Mobilansicht verbessern; Edge-Cases und Reset absichern.

@@ -32,6 +32,10 @@ const GameEngine = (() => {
         deck.push({ type: 'number', value });
       }
     }
+    // Vereinfachte, nicht-offizielle Ergänzung: jede Sonderkarte einmal pro Stapel.
+    [2, 4, 6, 8, 10].forEach((points) => deck.push({ type: 'bonus', points, label: `+${points}` }));
+    deck.push({ type: 'action', effect: 'secondChance', label: 'Zweite Chance' });
+    deck.push({ type: 'action', effect: 'freeze', label: 'Freeze' });
     return deck;
   }
 
@@ -87,20 +91,29 @@ const GameEngine = (() => {
         roundPoints: 0,
         busted: false,
         banked: false,
+        secondChance: false,
       }])),
     };
+  }
+
+  function grantSecondChance(round, playerId) {
+    const player = round.players[playerId];
+    return { ...round, players: { ...round.players, [playerId]: { ...player, secondChance: true } } };
   }
 
   function drawNumber(round, playerId, value) {
     const player = round.players[playerId];
     const duplicate = player.seenNumbers.includes(value);
-    const nextPlayer = duplicate
+    const protectedDuplicate = duplicate && player.secondChance;
+    const nextPlayer = duplicate && !protectedDuplicate
       ? { ...player, busted: true, roundPoints: 0 }
-      : {
-          ...player,
-          seenNumbers: [...player.seenNumbers, value],
-          roundPoints: player.roundPoints + value,
-        };
+      : protectedDuplicate
+        ? { ...player, secondChance: false }
+        : {
+            ...player,
+            seenNumbers: [...player.seenNumbers, value],
+            roundPoints: player.roundPoints + value,
+          };
 
     return { ...round, players: { ...round.players, [playerId]: nextPlayer } };
   }
@@ -124,6 +137,27 @@ const GameEngine = (() => {
         ...round,
         players: { ...round.players, [playerId]: { ...player, banked: true } },
       },
+    };
+  }
+
+  function eligibleFreezeTargets(state) {
+    const playerId = activePlayerId(state);
+    return state.players.filter((player) => player.id !== playerId && !state.round.players[player.id].banked);
+  }
+
+  function freezePlayer(state, targetId) {
+    const playerId = activePlayerId(state);
+    if (state.phase !== 'freezeTarget') throw new Error('Freeze benötigt eine Zielauswahl.');
+    const target = state.round.players[targetId];
+    if (targetId === playerId || !target) throw new Error('Freeze muss eine andere Person treffen.');
+    if (target.banked) throw new Error('Freeze kann keine bereits gesicherten Punkte erneut banken.');
+    const banked = bankPoints(state, state.round, targetId);
+    return {
+      ...state,
+      ...banked.game,
+      round: banked.round,
+      phase: 'turn',
+      lastEvent: `${state.players.find((player) => player.id === targetId).name} wurde eingefroren und hat Punkte gesichert.`,
     };
   }
 
@@ -152,6 +186,28 @@ const GameEngine = (() => {
     return state.activePlayerIndex;
   }
 
+  function finishRound(state, event = 'Runde beendet.') {
+    let scores = { ...state.scores };
+    const players = {};
+    state.players.forEach((player) => {
+      const roundPlayer = state.round.players[player.id];
+      const points = roundPlayer.busted || roundPlayer.banked ? 0 : roundPlayer.roundPoints;
+      scores[player.id] += points;
+      players[player.id] = { ...roundPlayer, banked: roundPlayer.banked || !roundPlayer.busted };
+    });
+    const highest = Math.max(...state.players.map((player) => scores[player.id]));
+    const leaders = state.players.filter((player) => scores[player.id] === highest);
+    const winner = highest >= 200 && leaders.length === 1 ? leaders[0] : null;
+    return {
+      ...state,
+      scores,
+      round: { ...state.round, players },
+      phase: winner ? 'gameOver' : 'roundResult',
+      winnerId: winner ? winner.id : null,
+      lastEvent: event,
+    };
+  }
+
   function beginNextRound(state, random = Math.random) {
     const roundStarterIndex = (state.roundStarterIndex + 1) % state.players.length;
     return {
@@ -167,25 +223,53 @@ const GameEngine = (() => {
   }
 
   function advanceAfterPlayer(state, random = Math.random) {
-    if (allPlayersFinished(state)) return beginNextRound(state, random);
+    if (allPlayersFinished(state)) return finishRound(state);
     return { ...state, activePlayerIndex: nextActivePlayerIndex(state), phase: 'handoff', lastCard: null };
   }
 
-  function drawActiveNumber(state, random = Math.random) {
+  function drawActiveCard(state, random = Math.random) {
     if (state.phase !== 'turn') throw new Error('Eine Karte kann nur während eines Zuges aufgedeckt werden.');
     const card = state.deck[0];
     if (!card) throw new Error('Der Stapel ist leer.');
     const playerId = activePlayerId(state);
+    const base = { ...state, deck: state.deck.slice(1), lastCard: card };
+    if (card.type === 'bonus') {
+      const player = state.round.players[playerId];
+      return {
+        ...base,
+        round: { ...state.round, players: { ...state.round.players, [playerId]: { ...player, roundPoints: player.roundPoints + card.points } } },
+        lastEvent: `+${card.points} Rundenpunkte erhalten.`,
+      };
+    }
+    if (card.effect === 'secondChance') {
+      return { ...base, round: grantSecondChance(state.round, playerId), lastEvent: 'Zweite Chance: Das nächste Zahlen-Duplikat wird neutralisiert.' };
+    }
+    if (card.effect === 'freeze') {
+      if (eligibleFreezeTargets(state).length === 0) {
+        return { ...base, lastEvent: 'Freeze ohne Effekt: Es gibt kein gültiges Ziel.' };
+      }
+      return { ...base, phase: 'freezeTarget', lastEvent: 'Freeze: Wähle eine andere Person, deren Rundenpunkte gesichert werden.' };
+    }
     const updatedRound = drawNumber(state.round, playerId, card.value);
     const next = {
-      ...state,
-      deck: state.deck.slice(1),
+      ...base,
       round: updatedRound,
-      lastCard: card,
       lastEvent: `Zahl ${card.value} aufgedeckt.`,
     };
+    if (hasFlip7(updatedRound, playerId)) {
+      const player = updatedRound.players[playerId];
+      const withBonus = {
+        ...updatedRound,
+        players: { ...updatedRound.players, [playerId]: { ...player, roundPoints: player.roundPoints + 15 } },
+      };
+      return finishRound({ ...next, round: withBonus }, 'Flip 7! 15 Bonuspunkte – Runde beendet.');
+    }
     if (!updatedRound.players[playerId].busted) return next;
     return advanceAfterPlayer({ ...next, lastEvent: 'Doppelte Zahl – bust!' }, random);
+  }
+
+  function drawActiveNumber(state, random = Math.random) {
+    return drawActiveCard(state, random);
   }
 
   function bankActivePlayer(state, random = Math.random) {
@@ -193,15 +277,13 @@ const GameEngine = (() => {
     const playerId = activePlayerId(state);
     const banked = bankPoints(state, state.round, playerId);
     const scored = { ...state, ...banked.game, round: banked.round, lastEvent: 'Punkte gesichert.' };
-    const winner = scored.players.find((player) => scored.scores[player.id] >= 200);
-    if (winner) return { ...scored, phase: 'gameOver', winnerId: winner.id };
     return advanceAfterPlayer(scored, random);
   }
 
   return {
     buildDeck, shuffle, normalizePlayers, startLocalGame, createGameState, createRoundState,
-    drawNumber, hasFlip7, calculateNumberPoints, bankPoints, showTurn, drawActiveNumber,
-    bankActivePlayer, beginNextRound,
+    drawNumber, grantSecondChance, hasFlip7, calculateNumberPoints, bankPoints, eligibleFreezeTargets, freezePlayer, showTurn, drawActiveCard, drawActiveNumber,
+    bankActivePlayer, finishRound, beginNextRound,
   };
 })();
 
@@ -230,10 +312,14 @@ if (typeof module !== 'undefined') {
           `<li>${escapeHtml(player.name)}: <strong>${state.scores[player.id]}</strong></li>`).join('')}</ul>`;
       }
 
+      function rules() {
+        return `<details><summary>Regeln &amp; Hilfe</summary><p>Zahlen bringen ihren Wert. Eine doppelte eigene Zahl führt zu 0 Rundenpunkten; Zweite Chance neutralisiert genau ein solches Duplikat. +2 bis +10 erhöhen die Rundenpunkte. Bei sieben verschiedenen Zahlen endet die Runde mit 15 Flip-7-Bonuspunkten. Freeze lässt eine gewählte andere Person ihre aktuellen Rundenpunkte sichern. Bei 200 gewinnt nur eine allein führende Person.</p></details>`;
+      }
+
       function renderSetup() {
         const count = state.playerCount || 2;
         app.innerHTML = `
-          <h1>Flip 7</h1>
+          <h1>Flip 7</h1>${rules()}
           <section class="panel" aria-labelledby="setup-title">
             <h2 id="setup-title">Lokale Partie einrichten</h2>
             <p>Für zwei bis vier Personen. Kartenhände bleiben beim Weitergeben verborgen.</p>
@@ -258,7 +344,7 @@ if (typeof module !== 'undefined') {
 
       function renderHandoff() {
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}
+          <h1>Flip 7</h1>${scoreList()}${rules()}
           <section class="panel" aria-labelledby="handoff-title">
             <h2 id="handoff-title">Übergabe</h2>
             <p>Bitte gib das Gerät an <strong>${escapeHtml(activePlayer().name)}</strong>.</p>
@@ -271,9 +357,9 @@ if (typeof module !== 'undefined') {
       function renderTurn() {
         const player = activePlayer();
         const roundPlayer = state.round.players[player.id];
-        const hasCard = roundPlayer.seenNumbers.length > 0;
+        const hasCard = roundPlayer.roundPoints > 0 || state.lastCard;
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}
+          <h1>Flip 7</h1>${scoreList()}${rules()}
           <section class="panel" aria-labelledby="turn-title">
             <h2 id="turn-title">${escapeHtml(player.name)} ist am Zug</h2>
             <p>Rundenpunkte: <strong>${roundPlayer.roundPoints}</strong> · Reststapel: ${state.deck.length}</p>
@@ -283,15 +369,45 @@ if (typeof module !== 'undefined') {
             <button id="draw-card" type="button">${hasCard ? 'Weiter aufdecken' : 'Karte aufdecken'}</button>
             ${hasCard ? '<button id="bank-points" type="button">Passen &amp; Punkte sichern</button>' : ''}
           </section>`;
-        document.querySelector('#draw-card').addEventListener('click', () => { state = GameEngine.drawActiveNumber(state); render(); });
+        document.querySelector('#draw-card').addEventListener('click', () => { state = GameEngine.drawActiveCard(state); render(); });
         const bank = document.querySelector('#bank-points');
         if (bank) bank.addEventListener('click', () => { state = GameEngine.bankActivePlayer(state); render(); });
+      }
+
+      function renderFreezeTarget() {
+        const targets = GameEngine.eligibleFreezeTargets(state);
+        app.innerHTML = `
+          <h1>Flip 7</h1>${scoreList()}${rules()}
+          <section class="panel" aria-labelledby="freeze-title">
+            <h2 id="freeze-title">Freeze-Ziel wählen</h2>
+            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent)}</p>
+            <label for="freeze-target">Andere Person, deren aktuelle Rundenpunkte gesichert werden</label>
+            <select id="freeze-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)} (${state.round.players[player.id].roundPoints} Punkte)</option>`).join('')}</select>
+            <button id="confirm-freeze" type="button">Freeze ausführen</button>
+          </section>`;
+        document.querySelector('#confirm-freeze').addEventListener('click', () => {
+          state = GameEngine.freezePlayer(state, document.querySelector('#freeze-target').value);
+          render();
+        });
+      }
+
+      function renderRoundResult() {
+        app.innerHTML = `
+          <h1>Flip 7</h1>${scoreList()}${rules()}
+          <section class="panel" aria-labelledby="round-title">
+            <h2 id="round-title">Rundenergebnis</h2>
+            <p class="status" aria-live="polite">${escapeHtml(state.lastEvent || 'Runde beendet.')}</p>
+            <ul class="players">${state.players.map((player) => `<li>${escapeHtml(player.name)}: ${state.round.players[player.id].busted ? 'bust (0)' : `${state.round.players[player.id].roundPoints} Rundenpunkte`}</li>`).join('')}</ul>
+            <p>Die nächste Runde beginnt bei ${escapeHtml(state.players[(state.roundStarterIndex + 1) % state.players.length].name)}.</p>
+            <button id="next-round" type="button">Nächste Runde</button>
+          </section>`;
+        document.querySelector('#next-round').addEventListener('click', () => { state = GameEngine.beginNextRound(state); render(); });
       }
 
       function renderGameOver() {
         const winner = state.players.find((player) => player.id === state.winnerId);
         app.innerHTML = `
-          <h1>Flip 7</h1>${scoreList()}
+          <h1>Flip 7</h1>${scoreList()}${rules()}
           <section class="panel" aria-labelledby="winner-title">
             <h2 id="winner-title">${escapeHtml(winner.name)} gewinnt!</h2>
             <p>Das Ziel von 200 Punkten ist erreicht.</p>
@@ -304,6 +420,8 @@ if (typeof module !== 'undefined') {
         if (state.phase === 'setup') renderSetup();
         else if (state.phase === 'handoff') renderHandoff();
         else if (state.phase === 'turn') renderTurn();
+        else if (state.phase === 'freezeTarget') renderFreezeTarget();
+        else if (state.phase === 'roundResult') renderRoundResult();
         else renderGameOver();
       }
 

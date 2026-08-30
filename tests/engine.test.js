@@ -18,13 +18,27 @@ test('buildDeck creates the documented number-card distribution', () => {
   const { buildDeck } = loadEngine();
   const deck = buildDeck();
 
-  assert.equal(deck.length, 91);
+  assert.equal(deck.length, 98);
   for (let value = 0; value <= 12; value += 1) {
     assert.equal(
       deck.filter((card) => card.type === 'number' && card.value === value).length,
       value + 1,
     );
   }
+});
+
+test('buildDeck includes every documented bonus and action card', () => {
+  const { buildDeck } = loadEngine();
+  const deck = buildDeck();
+
+  assert.deepEqual(
+    Array.from(deck.filter((card) => card.type === 'bonus').map((card) => card.points)).sort((a, b) => a - b),
+    [2, 4, 6, 8, 10],
+  );
+  assert.deepEqual(
+    Array.from(deck.filter((card) => card.type === 'action').map((card) => card.effect)).sort(),
+    ['freeze', 'secondChance'],
+  );
 });
 
 test('drawNumber busts a player who reveals a duplicate number', () => {
@@ -54,6 +68,20 @@ test('calculateNumberPoints totals revealed number-card values', () => {
   assert.equal(calculateNumberPoints([{ type: 'number', value: 0 }, { type: 'number', value: 4 }, { type: 'number', value: 12 }]), 16);
 });
 
+test('Zweite Chance saves exactly one duplicate number', () => {
+  const { createRoundState, drawNumber, grantSecondChance } = loadEngine();
+  let round = createRoundState([{ id: 'ada', name: 'Ada' }]);
+  round = drawNumber(round, 'ada', 4);
+  round = grantSecondChance(round, 'ada');
+  round = drawNumber(round, 'ada', 4);
+
+  assert.equal(round.players.ada.busted, false);
+  assert.equal(round.players.ada.secondChance, false);
+  assert.equal(round.players.ada.roundPoints, 4);
+  assert.equal(round.players.ada.seenNumbers.length, 1);
+  assert.equal(drawNumber(round, 'ada', 4).players.ada.busted, true);
+});
+
 test('hasFlip7 recognizes seven different revealed numbers', () => {
   const { createRoundState, drawNumber, hasFlip7 } = loadEngine();
   let round = createRoundState([{ id: 'ada', name: 'Ada' }]);
@@ -76,7 +104,62 @@ test('startLocalGame normalizes player names and opens the first handoff', () =>
   assert.equal(state.phase, 'handoff');
   assert.equal(state.activePlayerIndex, 0);
   assert.equal(state.roundStarterIndex, 0);
-  assert.equal(state.deck.length, 91);
+  assert.equal(state.deck.length, 98);
+});
+
+test('Freeze banks only the selected other player current round points', () => {
+  const { startLocalGame, createRoundState, drawNumber, freezePlayer } = loadEngine();
+  const game = startLocalGame(['Ada', 'Bert', 'Cem']);
+  const round = drawNumber(drawNumber(createRoundState(game.players), 'player-2', 3), 'player-2', 5);
+  const frozen = freezePlayer({ ...game, round, phase: 'freezeTarget' }, 'player-2');
+
+  assert.equal(frozen.scores['player-1'], 0);
+  assert.equal(frozen.scores['player-2'], 8);
+  assert.equal(frozen.scores['player-3'], 0);
+  assert.equal(frozen.round.players['player-2'].banked, true);
+  assert.equal(frozen.phase, 'turn');
+});
+
+test('Freeze rejects an already banked target without changing its score', () => {
+  const { startLocalGame, freezePlayer } = loadEngine();
+  const game = startLocalGame(['Ada', 'Bert']);
+  const state = {
+    ...game,
+    phase: 'freezeTarget',
+    scores: { ...game.scores, 'player-1': 7 },
+    activePlayerIndex: 1,
+    round: {
+      ...game.round,
+      players: {
+        ...game.round.players,
+        'player-1': { ...game.round.players['player-1'], banked: true, roundPoints: 7 },
+      },
+    },
+  };
+
+  assert.throws(() => freezePlayer(state, 'player-1'), /nicht.*banked|bereits.*gesichert/i);
+  assert.equal(state.scores['player-1'], 7);
+});
+
+test('drawing Freeze with no eligible target returns to the turn instead of opening an empty target UI', () => {
+  const { startLocalGame, showTurn, drawActiveCard } = loadEngine();
+  const game = startLocalGame(['Ada', 'Bert']);
+  const state = {
+    ...game,
+    deck: [{ type: 'action', effect: 'freeze', label: 'Freeze' }],
+    round: {
+      ...game.round,
+      players: {
+        ...game.round.players,
+        'player-2': { ...game.round.players['player-2'], banked: true },
+      },
+    },
+  };
+
+  const result = drawActiveCard(showTurn(state));
+
+  assert.equal(result.phase, 'turn');
+  assert.match(result.lastEvent, /kein gültiges Ziel/i);
 });
 
 test('bankActivePlayer adds active points then hands off to the next player', () => {
@@ -90,6 +173,16 @@ test('bankActivePlayer adds active points then hands off to the next player', ()
   assert.equal(next.round.players['player-1'].banked, true);
   assert.equal(next.activePlayerIndex, 1);
   assert.equal(next.phase, 'handoff');
+});
+
+test('drawing a bonus card adds its printed points and keeps the turn playable', () => {
+  const { startLocalGame, showTurn, drawActiveCard } = loadEngine();
+  const starting = { ...startLocalGame(['Ada', 'Bert']), deck: [{ type: 'bonus', points: 6, label: '+6' }] };
+  const next = drawActiveCard(showTurn(starting));
+
+  assert.equal(next.round.players['player-1'].roundPoints, 6);
+  assert.equal(next.lastEvent, '+6 Rundenpunkte erhalten.');
+  assert.equal(next.phase, 'turn');
 });
 
 test('drawActiveNumber busts on a duplicate and hands off without scoring', () => {
@@ -108,12 +201,13 @@ test('drawActiveNumber busts on a duplicate and hands off without scoring', () =
   assert.equal(afterDuplicate.phase, 'handoff');
 });
 
-test('after every player banks, a fresh round begins with the next starter', () => {
-  const { startLocalGame, showTurn, drawActiveNumber, bankActivePlayer } = loadEngine();
+test('after every player banks, the round result starts a fresh round with the next starter', () => {
+  const { startLocalGame, showTurn, drawActiveNumber, bankActivePlayer, beginNextRound } = loadEngine();
   const first = { ...startLocalGame(['Ada', 'Bert']), deck: [{ type: 'number', value: 3 }] };
   const afterAda = bankActivePlayer(drawActiveNumber(showTurn(first)));
   const bertTurn = { ...afterAda, deck: [{ type: 'number', value: 4 }] };
-  const nextRound = bankActivePlayer(drawActiveNumber(showTurn(bertTurn)));
+  const result = bankActivePlayer(drawActiveNumber(showTurn(bertTurn)));
+  const nextRound = beginNextRound(result);
 
   assert.equal(nextRound.scores['player-1'], 3);
   assert.equal(nextRound.scores['player-2'], 4);
@@ -123,11 +217,41 @@ test('after every player banks, a fresh round begins with the next starter', () 
   assert.equal(nextRound.round.players['player-1'].banked, false);
 });
 
-test('bankActivePlayer declares the first player to reach 200 the winner', () => {
-  const { startLocalGame, showTurn, drawActiveNumber, bankActivePlayer } = loadEngine();
+test('seven different numbers trigger Flip 7, add the documented 15-point bonus, and end the round', () => {
+  const { startLocalGame, showTurn, drawActiveCard } = loadEngine();
   const game = startLocalGame(['Ada', 'Bert']);
-  const nearlyWon = { ...game, scores: { ...game.scores, 'player-1': 199 }, deck: [{ type: 'number', value: 1 }] };
-  const finished = bankActivePlayer(drawActiveNumber(showTurn(nearlyWon)));
+  const prepared = {
+    ...game,
+    phase: 'handoff',
+    deck: [{ type: 'number', value: 7 }],
+    round: {
+      ...game.round,
+      players: {
+        ...game.round.players,
+        'player-1': { ...game.round.players['player-1'], seenNumbers: [0, 1, 2, 3, 4, 5], roundPoints: 15 },
+      },
+    },
+  };
+  const result = drawActiveCard(showTurn(prepared));
+
+  assert.equal(result.phase, 'roundResult');
+  assert.equal(result.scores['player-1'], 37);
+  assert.match(result.lastEvent, /Flip 7/);
+});
+
+test('a tied high score at 200 continues to a round result instead of ending the game', () => {
+  const { startLocalGame, finishRound } = loadEngine();
+  const game = { ...startLocalGame(['Ada', 'Bert']), scores: { 'player-1': 200, 'player-2': 200 } };
+  const result = finishRound(game);
+
+  assert.equal(result.phase, 'roundResult');
+  assert.equal(result.winnerId, null);
+});
+
+test('a sole leader at 200 wins when the round finishes', () => {
+  const { startLocalGame, finishRound } = loadEngine();
+  const game = { ...startLocalGame(['Ada', 'Bert']), scores: { 'player-1': 200, 'player-2': 199 } };
+  const finished = finishRound(game);
 
   assert.equal(finished.phase, 'gameOver');
   assert.equal(finished.winnerId, 'player-1');
