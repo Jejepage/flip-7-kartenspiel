@@ -10,7 +10,7 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 - Pass-and-Play für **2–4 Spielende** mit frei wählbaren deutschen Namen.
 - Deutsche Benutzeroberfläche und verständliche Spielhinweise.
 - Kartenstapel mit Zahlenkarten; eine bereits in derselben Runde bei einer Person vorhandene Zahl führt zum Bust und zu 0 Rundenpunkten.
-- Entscheidung nach einem gültigen Zug: **Weiter aufdecken** oder **Passen/Banken**.
+- Nach dem anfänglichen offenen Austeilen je einer Karte wählen aktive Personen im Uhrzeigersinn auf ihrem Zug genau einmal: **Hit** deckt genau eine weitere Karte auf, **Stay/Passen** bankt und beendet ihre Rundenteilnahme. Nach jeder Auflösung wechselt der Zug zur nächsten aktiven Person.
 - **Flip-7-Bonus**: sieben unterschiedliche Zahlenkarten in einer Runde beenden die Runde sofort und vergeben den festgelegten Bonus.
 - Spielbare Annäherung an Aktions- und Bonuskarten: mindestens `Zweite Chance` (einmaliger Schutz vor einem Zahlen-Duplikat), `+2`, `+4`, `+6`, `+8`, `+10` sowie `Freeze` (Zielperson bankt ihre aktuellen Rundenpunkte). Regeln und Effekte sind in der Oberfläche erläutert.
 - Zielwert: **200 Punkte**; bei Gleichstand nach Rundenende wird weitergespielt, bis eine Person allein führt.
@@ -28,9 +28,9 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
    - Verhindert, dass die Hand der vorherigen Person beim Weiterreichen sichtbar bleibt.
 3. **Spielzug / Runde**
    - Zeigt aktive Person, Gesamtpunktestand, sichere Rundenpunkte, eigene offene Karten, Reststapel und die letzte gezogene Karte.
-   - „Karte aufdecken“ zieht die nächste Karte und zeigt ihren Effekt; nach einer gültigen Zahlenkarte stehen „Weiter aufdecken“ und „Passen & Punkte sichern“ zur Wahl.
-   - Aktionskarten führen ihren beschriebenen Effekt aus; wenn ein Ziel gewählt werden muss, erscheint eine klar beschriftete Zielauswahl.
-   - Bust, erzwungenes Banken, Flip 7 und leere Zugmöglichkeiten enden nachvollziehbar und wechseln zur Übergabe bzw. Rundenwertung.
+   - Zu Rundenbeginn erhält jede Person genau eine offene Karte. Anschließend bietet jeder Zug nur „Hit: genau eine Karte aufdecken“ oder „Stay/Passen & Punkte sichern“; es gibt kein fortgesetztes Selbst-Aufdecken im selben Zug.
+   - Die aufgedeckte Karte und ein gegebenenfalls erforderliches Aktionsziel werden vollständig aufgelöst; danach folgt über den Übergabebildschirm die nächste noch aktive Person im Uhrzeigersinn.
+   - Bust, Zweite Chance, erzwungenes Banken durch Freeze, Flip 7 und leere Zugmöglichkeiten enden nachvollziehbar, übergeben korrekt oder führen zur Rundenwertung.
 4. **Rundenergebnis**
    - Zeigt Punkteänderungen, Gesamtstände und wer die nächste Runde beginnt.
 5. **Spielende**
@@ -66,7 +66,7 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 **Status: DONE**
 
 ### Stufe 2: Lokaler Spielablauf für Zahlenkarten
-**Umfang:** Einrichtung für 2–4 Namen, Übergabebildschirm, aktive Person, Aufdecken, Weiter/Passen, Bust, Rundenwechsel und Ziel 200 mit UI verbinden. Tests zuerst für jede neue Zustandsübergangsfamilie ergänzen.
+**Umfang:** Einrichtung für 2–4 Namen, Übergabebildschirm, aktive Person, einzelnes Aufdecken oder Passen, Bust, Rundenwechsel und Ziel 200 mit UI verbinden. Tests zuerst für jede neue Zustandsübergangsfamilie ergänzen.
 
 **Akzeptanzkriterien:**
 - Zwei bis vier Personen können lokal mehrere Runden spielen, bis eine Person mindestens 200 Punkte erreicht.
@@ -106,5 +106,18 @@ Eine ohne Installation im Browser ausführbare, zugängliche und auf Mobilgerät
 - Produkt bleibt eine eigenständige `index.html`; es gibt keine Produktionsabhängigkeiten oder externen Requests.
 - Die Änderungen sind in das konfigurierte GitHub-Remote gepusht und der Push wurde mit `git ls-remote` oder gleichwertig verifiziert.
 - GitHub Pages liefert die Seite erfolgreich aus; die veröffentlichte URL wurde geladen und getestet.
+
+**Status: DONE**
+
+### Stufe 6: Tischkarten-Design und regelgetreuer Einzelkarten-Zug
+**Umfang:** `index.html` und `tests/engine.test.js` auf ein eigenständiges, zugängliches Tischkarten-Design umstellen und den Zustandsautomaten auf das offizielle Grundmuster korrigieren: Zu Beginn erhält jede Person eine offene Karte; danach wählen die noch aktiven Personen im Uhrzeigersinn je Zug genau einen Hit oder Stay. Ein Hit deckt genau eine Karte auf, löst sie vollständig auf und übergibt dann an die nächste berechtigte Person. Die Hilfe benennt Quellen und weiterhin beabsichtigte Regelannäherungen transparent.
+
+**Akzeptanzkriterien:**
+- Die Oberfläche vermittelt mit ausschließlich eigenem HTML/CSS (z. B. Tischfläche, Kartenrücken/-vorderseiten, Chips/Marker und eigene Typografie) eine physische Kartenrunde; weder Logo, Kartenillustrationen noch andere Assets des Originalspiels werden kopiert oder extern geladen.
+- Tastaturbedienung, sichtbarer Fokus, Kontrast, Live-Status und die Bedienbarkeit bei ca. 320 px sowie am Desktop bleiben erhalten; das aufgefrischte Layout lässt Karten, aktive Person, Hand-off und primäre Aktion klar erkennen.
+- Ein deterministischer Test belegt das anfängliche offene Austeilen genau einer Karte pro Person. Danach führt Hit für eine aktive Person zu genau einer aufgedeckten Karte und zur Übergabe an die nächste aktive Person im Uhrzeigersinn; dieselbe Person erhält nicht unmittelbar erneut eine Ziehentscheidung.
+- Stay bankt auf dem eigenen Zug ohne weitere Karte und übergibt an die nächste aktive Person. Bust/Duplikat, eine verbrauchte Zweite Chance, Freeze mit erzwungenem Banken sowie jede Zielauswahl bzw. sonstige erzwungene Auflösung schließen den auslösenden Zug ab und übergeben an die nächste berechtigte Person oder werten die Runde aus, wenn keine Person mehr aktiv ist.
+- Flip 7 beendet die Runde weiterhin sofort; alle Zustandsübergänge sind mit `node --test tests/engine.test.js` abgedeckt und bestehen. Ein manueller 2–4-Personen-Smoke-Test prüft die Abfolge Erstausteilen → Hit/Stay → Hand-off sowie Tastatur- und Mobilansicht.
+- Regeln/Hilfe verweisen auf die geprüften Regelquellen (Happy Piranha und Dized) und unterscheiden klar zwischen diesem Zugablauf und verbleibenden transparent dokumentierten Annäherungen, insbesondere Deckhäufigkeiten und ggf. nicht umgesetzten Karten-/Wertungseffekten.
 
 **Status: DONE**

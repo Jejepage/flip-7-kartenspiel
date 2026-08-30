@@ -1,6 +1,6 @@
 # Projektstatus
 
-- **Aktuelle Stufe:** 5
-- **Status:** Abgeschlossen
-- **Letzte erfolgreich abgeschlossene Stufe:** 5
-- **Nächste konkrete Aktion:** Keine; GitHub Pages ist aus `main`/`/` aktiv und die Live-Seite wurde erfolgreich abgerufen.
+- **Aktuelle Stufe:** 6
+- **Status:** Git
+- **Letzte erfolgreich abgeschlossene Stufe:** 6
+- **Nächste konkrete Aktion:** Den unabhängig bestandenen Stand der Stufe 6 committen, zu GitHub pushen und den Remote-Checkpoint verifizieren.

@@ -5,29 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flip 7</title>
   <style>
-    :root { color-scheme: light; --ink: #16232b; --surface: #ffffff; --page: #edf2f1; --accent: #075a67; --accent-dark: #043e48; --line: #42616a; --warm: #fff3bd; --focus: #b64500; }
+    :root { color-scheme: light; --ink: #f7f1dd; --surface: #173d34; --page: #0b211c; --accent: #edb342; --accent-dark: #7a3e17; --line: #d8c28a; --warm: #fff7df; --focus: #fff; }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; margin: 0; min-width: 0; background: var(--page); color: var(--ink); line-height: 1.5; }
-    main { width: min(100%, 70rem); margin: 0 auto; padding: clamp(1rem, 4vw, 2rem); overflow-wrap: anywhere; }
+    body { font-family: ui-rounded, system-ui, sans-serif; margin: 0; min-width: 0; background: radial-gradient(circle at 50% 20%, #245747, var(--page) 68%); color: var(--ink); line-height: 1.5; }
+    main { width: min(100%, 70rem); min-height: 100vh; margin: 0 auto; padding: clamp(.75rem, 4vw, 2rem); overflow-wrap: anywhere; }
     h1, h2, h3 { line-height: 1.2; }
     h1 { margin: 0; font-size: clamp(1.75rem, 5vw, 2.5rem); }
     h2 { margin-top: 0; }
     .app-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
-    .panel { background: var(--surface); border: 1px solid #bdcdd0; border-radius: .75rem; padding: clamp(1rem, 4vw, 1.5rem); box-shadow: 0 2px 8px #0002; }
+    .panel { background: linear-gradient(135deg, #1b493d, var(--surface)); border: 2px solid #bb9851; border-radius: 1rem; padding: clamp(1rem, 4vw, 1.5rem); box-shadow: 0 .35rem 0 #07130f, inset 0 0 0 1px #ffffff21; }
     .players, .cards { display: flex; flex-wrap: wrap; gap: .5rem; padding: 0; list-style: none; }
-    .players li, .card { border: 2px solid var(--line); border-radius: .5rem; padding: .5rem .75rem; background: #e7f2ef; }
-    .card { min-width: 3rem; text-align: center; font-size: 1.5rem; font-weight: 700; background: var(--warm); }
+    .players li { border: 1px solid #d8c28a88; border-radius: 999px; padding: .35rem .7rem; background: #09251e; }
+    .card { display:grid; place-items:center; min-width: 3.4rem; min-height: 4.6rem; border: 3px double #6c3516; border-radius: .55rem; padding: .35rem; color: #301b12; text-align: center; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #fffdf1, var(--warm)); box-shadow: .16rem .18rem 0 #0005; }
     label, input, select, button { display: block; font: inherit; }
     label { margin-top: .9rem; font-weight: 650; }
-    input, select { width: 100%; min-height: 2.75rem; padding: .5rem; border: 2px solid var(--line); border-radius: .35rem; background: #fff; color: var(--ink); }
-    button { min-height: 2.75rem; margin-top: 1rem; padding: .6rem 1rem; border: 2px solid var(--accent-dark); border-radius: .35rem; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+    input, select { width: 100%; min-height: 2.75rem; padding: .5rem; border: 2px solid var(--line); border-radius: .35rem; background: #fffdf1; color: #17251f; }
+    button { min-height: 2.75rem; margin-top: 1rem; padding: .6rem 1rem; border: 2px solid #5d2c13; border-radius: .45rem; background: linear-gradient(#f6c85d, var(--accent)); color: #21150d; font-weight: 800; cursor: pointer; box-shadow: 0 .16rem 0 #55270f; }
     button + button { margin-left: .5rem; }
-    button.secondary { background: #fff; color: var(--accent-dark); }
-    button:hover { background: var(--accent-dark); }
-    button.secondary:hover { background: #dcebea; }
+    button.secondary { background: #f7f1dd; color: #273b32; }
+    button:hover { filter: brightness(1.08); }
+    button.secondary:hover { background: #fff; }
     button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, [data-focus]:focus { outline: 4px solid var(--focus); outline-offset: 3px; }
-    .status { min-height: 1.5rem; padding: .5rem .75rem; border-left: 4px solid var(--accent); background: #e7f2ef; font-weight: 700; }
-    details { margin: 1rem 0; border: 1px solid #8aa2a7; border-radius: .5rem; background: #fff; padding: .5rem .75rem; }
+    .status { min-height: 1.5rem; padding: .5rem .75rem; border-left: 4px solid var(--accent); background: #071b15; font-weight: 700; }
+    details { margin: 1rem 0; border: 1px solid #d8c28a; border-radius: .5rem; background: #102f27; padding: .5rem .75rem; }
     summary { cursor: pointer; font-weight: 700; }
     @media (max-width: 360px) { main { padding: .75rem; } .panel { border-radius: .5rem; } button { width: 100%; } button + button { margin-left: 0; } .players li, .card { max-width: 100%; } }
   </style>
@@ -78,9 +78,10 @@ const GameEngine = (() => {
     }
     return {
       ...createGameState(players),
-      phase: 'handoff',
+      phase: 'initialDeal',
       deck: shuffle(buildDeck(), random),
       round: createRoundState(players),
+      initialDealCount: 0,
       lastCard: null,
       lastEvent: '',
     };
@@ -104,6 +105,7 @@ const GameEngine = (() => {
   function createRoundState(players) {
     return {
       players: Object.fromEntries(players.map((player) => [player.id, {
+        cards: [],
         seenNumbers: [],
         roundPoints: 0,
         busted: false,
@@ -159,7 +161,10 @@ const GameEngine = (() => {
 
   function eligibleFreezeTargets(state) {
     const playerId = activePlayerId(state);
-    return state.players.filter((player) => player.id !== playerId && !state.round.players[player.id].banked);
+    return state.players.filter((player) => {
+      const roundPlayer = state.round.players[player.id];
+      return player.id !== playerId && !roundPlayer.banked && !roundPlayer.busted;
+    });
   }
 
   function freezePlayer(state, targetId) {
@@ -167,15 +172,17 @@ const GameEngine = (() => {
     if (state.phase !== 'freezeTarget') throw new Error('Freeze benötigt eine Zielauswahl.');
     const target = state.round.players[targetId];
     if (targetId === playerId || !target) throw new Error('Freeze muss eine andere Person treffen.');
-    if (target.banked) throw new Error('Freeze kann keine bereits gesicherten Punkte erneut banken.');
+    if (target.banked || target.busted) throw new Error('Freeze kann keine bereits gesicherte oder gebustete Person treffen.');
     const banked = bankPoints(state, state.round, targetId);
-    return {
+    const resolved = {
       ...state,
       ...banked.game,
       round: banked.round,
-      phase: 'turn',
+      phase: state.resumePhase || 'handoff',
+      resumePhase: null,
       lastEvent: `${state.players.find((player) => player.id === targetId).name} wurde eingefroren und hat Punkte gesichert.`,
     };
+    return resolved.phase === 'initialReveal' ? resolved : advanceAfterPlayer(resolved);
   }
 
   function activePlayerId(state) {
@@ -237,9 +244,10 @@ const GameEngine = (() => {
       ...state,
       roundStarterIndex,
       activePlayerIndex: roundStarterIndex,
-      phase: 'handoff',
+      phase: 'initialDeal',
       deck: shuffle(buildDeck(), random),
       round: createRoundState(state.players),
+      initialDealCount: 0,
       lastCard: null,
       lastEvent: 'Neue Runde.',
     };
@@ -250,45 +258,49 @@ const GameEngine = (() => {
     return { ...state, activePlayerIndex: nextActivePlayerIndex(state), phase: 'handoff', lastCard: null };
   }
 
-  function drawActiveCard(state, random = Math.random) {
-    if (state.phase !== 'turn') throw new Error('Eine Karte kann nur während eines Zuges aufgedeckt werden.');
+  function continueInitialDeal(state) {
+    if (state.phase !== 'initialReveal') throw new Error('Die offene erste Karte muss vor der Übergabe angezeigt werden.');
+    const dealt = state.initialDealCount + 1;
+    if (dealt >= state.players.length) {
+      return { ...state, initialDealCount: dealt, activePlayerIndex: state.roundStarterIndex, phase: 'handoff', lastCard: null };
+    }
+    return { ...state, initialDealCount: dealt, activePlayerIndex: (state.roundStarterIndex + dealt) % state.players.length, phase: 'initialDeal', lastCard: null };
+  }
+
+  function revealCard(state, afterResolution, freezeResumePhase = state.phase) {
     const card = state.deck[0];
     if (!card) throw new Error('Der Stapel ist leer.');
     const playerId = activePlayerId(state);
-    const base = { ...state, deck: state.deck.slice(1), lastCard: card };
+    const player = state.round.players[playerId];
+    const withCard = { ...player, cards: [...player.cards, card] };
+    const base = { ...state, deck: state.deck.slice(1), lastCard: card, round: { ...state.round, players: { ...state.round.players, [playerId]: withCard } } };
     if (card.type === 'bonus') {
-      const player = state.round.players[playerId];
-      return {
-        ...base,
-        round: { ...state.round, players: { ...state.round.players, [playerId]: { ...player, roundPoints: player.roundPoints + card.points } } },
-        lastEvent: `+${card.points} Rundenpunkte erhalten.`,
-      };
+      const next = { ...base, round: { ...base.round, players: { ...base.round.players, [playerId]: { ...withCard, roundPoints: withCard.roundPoints + card.points } } }, lastEvent: `+${card.points} Rundenpunkte erhalten.` };
+      return afterResolution(next);
     }
-    if (card.effect === 'secondChance') {
-      return { ...base, round: grantSecondChance(state.round, playerId), lastEvent: 'Zweite Chance: Das nächste Zahlen-Duplikat wird neutralisiert.' };
-    }
+    if (card.effect === 'secondChance') return afterResolution({ ...base, round: grantSecondChance(base.round, playerId), lastEvent: 'Zweite Chance: Das nächste Zahlen-Duplikat wird neutralisiert.' });
     if (card.effect === 'freeze') {
-      if (eligibleFreezeTargets(state).length === 0) {
-        return { ...base, lastEvent: 'Freeze ohne Effekt: Es gibt kein gültiges Ziel.' };
-      }
-      return { ...base, phase: 'freezeTarget', lastEvent: 'Freeze: Wähle eine andere Person, deren Rundenpunkte gesichert werden.' };
+      if (eligibleFreezeTargets(base).length === 0) return afterResolution({ ...base, lastEvent: 'Freeze ohne Effekt: Es gibt kein gültiges Ziel.' });
+      return { ...base, phase: 'freezeTarget', resumePhase: freezeResumePhase, lastEvent: 'Freeze: Wähle eine andere Person, deren Rundenpunkte gesichert werden.' };
     }
-    const updatedRound = drawNumber(state.round, playerId, card.value);
-    const next = {
-      ...base,
-      round: updatedRound,
-      lastEvent: `Zahl ${card.value} aufgedeckt.`,
-    };
+    const updatedRound = drawNumber(base.round, playerId, card.value);
+    const next = { ...base, round: updatedRound, lastEvent: `Zahl ${card.value} aufgedeckt.` };
     if (hasFlip7(updatedRound, playerId)) {
-      const player = updatedRound.players[playerId];
-      const withBonus = {
-        ...updatedRound,
-        players: { ...updatedRound.players, [playerId]: { ...player, roundPoints: player.roundPoints + 15 } },
-      };
+      const updatedPlayer = updatedRound.players[playerId];
+      const withBonus = { ...updatedRound, players: { ...updatedRound.players, [playerId]: { ...updatedPlayer, roundPoints: updatedPlayer.roundPoints + 15 } } };
       return finishRound({ ...next, round: withBonus }, 'Flip 7! 15 Bonuspunkte – Runde beendet.');
     }
-    if (!updatedRound.players[playerId].busted) return next;
-    return advanceAfterPlayer({ ...next, lastEvent: 'Doppelte Zahl – bust!' }, random);
+    return afterResolution({ ...next, lastEvent: updatedRound.players[playerId].busted ? 'Doppelte Zahl – bust!' : next.lastEvent });
+  }
+
+  function dealInitialCard(state) {
+    if (state.phase !== 'initialDeal') throw new Error('Die erste Karte kann nur beim Erstausteilen aufgedeckt werden.');
+    return revealCard(state, (revealed) => ({ ...revealed, phase: 'initialReveal' }), 'initialReveal');
+  }
+
+  function drawActiveCard(state, random = Math.random) {
+    if (state.phase !== 'turn') throw new Error('Eine Karte kann nur während eines Zuges aufgedeckt werden.');
+    return revealCard(state, advanceAfterPlayer);
   }
 
   function drawActiveNumber(state, random = Math.random) {
@@ -305,7 +317,7 @@ const GameEngine = (() => {
 
   return {
     buildDeck, shuffle, normalizePlayers, startLocalGame, createGameState, resetLocalGame, createRoundState,
-    drawNumber, grantSecondChance, hasFlip7, calculateNumberPoints, bankPoints, eligibleFreezeTargets, freezePlayer, showTurn, handoffStatusMessage, drawActiveCard, drawActiveNumber,
+    drawNumber, grantSecondChance, hasFlip7, calculateNumberPoints, bankPoints, eligibleFreezeTargets, freezePlayer, showTurn, handoffStatusMessage, dealInitialCard, continueInitialDeal, drawActiveCard, drawActiveNumber,
     bankActivePlayer, finishRound, beginNextRound,
   };
 })();
@@ -336,7 +348,7 @@ if (typeof module !== 'undefined') {
       }
 
       function rules() {
-        return `<details><summary>Regeln und Hilfe</summary><p>Zahlen bringen ihren Wert. Eine doppelte eigene Zahl führt zu 0 Rundenpunkten; Zweite Chance neutralisiert genau ein solches Duplikat. +2 bis +10 erhöhen die Rundenpunkte. Bei sieben verschiedenen Zahlen endet die Runde mit 15 Flip-7-Bonuspunkten. Freeze lässt eine gewählte andere Person ihre aktuellen Rundenpunkte sichern. Bei 200 gewinnt nur eine allein führende Person.</p></details>`;
+        return `<details><summary>Regeln und Hilfe</summary><p>Jede Runde beginnt mit genau einer offenen Karte pro Person. Danach gibt es im Uhrzeigersinn genau einen Hit oder Stay pro Zug: Hit deckt eine Karte auf und übergibt sofort, Stay sichert ohne Karte und übergibt. Zahlen bringen ihren Wert; ein eigenes Duplikat bustet, außer eine Zweite Chance schützt einmal. +2 bis +10 erhöhen Punkte, Freeze bankt eine andere Person, und sieben unterschiedliche Zahlen beenden sofort die Runde mit 15 Bonuspunkten.</p><p>Geprüfte Ablaufquellen: Happy Piranha, <a href="https://www.happypiranha.com/en/flip-7-game-rules/">Flip 7 Game Rules</a>, und Dized, <a href="https://rules.dized.com/game/2C2Fkh8KR6y6PN6FmZA0rQ">Flip 7 Rules</a>. Diese lokale Annäherung verwendet bewusst nicht-offizielle Deckhäufigkeiten, nur die genannten Sonderkarten und einen vereinfachten 15-Punkte-Flip-7-Bonus.</p></details>`;
       }
 
       function pageHeader() {
@@ -385,6 +397,20 @@ if (typeof module !== 'undefined') {
         document.querySelector('#show-turn').addEventListener('click', () => { state = GameEngine.showTurn(state); render(); });
       }
 
+      function renderInitialDeal() {
+        const player = activePlayer();
+        app.innerHTML = `${pageHeader()}${scoreList()}<section class="panel" aria-labelledby="deal-title"><h2 id="deal-title" tabindex="-1" data-focus>Offene Erstausteilung</h2><p>Gib das Gerät an <strong>${escapeHtml(player.name)}</strong>. Jede Person erhält jetzt genau eine offene Karte.</p><p class="status" role="status" aria-live="polite">${escapeHtml(statusMessage(`${player.name} erhält die erste Karte.`))}</p><button id="deal-initial" type="button">Erste Karte aufdecken</button></section>`;
+        document.querySelector('#deal-initial').addEventListener('click', () => { state = GameEngine.dealInitialCard(state); render(); });
+      }
+
+      function renderInitialReveal() {
+        const player = activePlayer();
+        const card = state.lastCard;
+        const label = card.label || `Zahlenkarte ${card.value}`;
+        app.innerHTML = `${pageHeader()}${scoreList()}<section class="panel" aria-labelledby="reveal-title"><h2 id="reveal-title" tabindex="-1" data-focus>${escapeHtml(player.name)}s erste offene Karte</h2><p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(statusMessage('Karte aufgedeckt.'))}</p><ul class="cards" aria-label="Aufgedeckte erste Karte von ${escapeHtml(player.name)}"><li class="card" aria-label="${escapeHtml(label)}">${escapeHtml(card.label || card.value)}</li></ul><p>Nur ${escapeHtml(player.name)} hat diese Karte gesehen. Gib das Gerät erst danach weiter.</p><button id="continue-initial-deal" type="button">Karte gesehen – weitergeben</button></section>`;
+        document.querySelector('#continue-initial-deal').addEventListener('click', () => { state = GameEngine.continueInitialDeal(state); render(); });
+      }
+
       function renderTurn() {
         const player = activePlayer();
         const roundPlayer = state.round.players[player.id];
@@ -396,9 +422,9 @@ if (typeof module !== 'undefined') {
             <p>Rundenpunkte: <strong>${roundPlayer.roundPoints}</strong> · Reststapel: ${state.deck.length}</p>
             <p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(statusMessage(`${player.name} ist am Zug.`))}</p>
             <h3>Deine offenen Zahlen</h3>
-            <ul class="cards" aria-label="Offene Zahlen von ${escapeHtml(player.name)}">${roundPlayer.seenNumbers.map((value) => `<li class="card" aria-label="Zahlenkarte ${value}">${value}</li>`).join('') || '<li>Noch keine Karte</li>'}</ul>
-            <button id="draw-card" type="button">${hasCard ? 'Weiter aufdecken' : 'Karte aufdecken'}</button>
-            ${hasCard ? '<button id="bank-points" type="button">Passen &amp; Punkte sichern</button>' : ''}
+            <ul class="cards" aria-label="Offene Karten von ${escapeHtml(player.name)}">${roundPlayer.cards.map((card) => `<li class="card" aria-label="${escapeHtml(card.label || `Zahlenkarte ${card.value}`)}">${escapeHtml(card.label || card.value)}</li>`).join('') || '<li>Noch keine Karte</li>'}</ul>
+            <button id="draw-card" type="button">Hit: genau eine Karte</button>
+            <button id="bank-points" type="button" class="secondary">Stay: Punkte sichern</button>
           </section>`;
         document.querySelector('#draw-card').addEventListener('click', () => { state = GameEngine.drawActiveCard(state); render(); });
         const bank = document.querySelector('#bank-points');
@@ -407,11 +433,13 @@ if (typeof module !== 'undefined') {
 
       function renderFreezeTarget() {
         const targets = GameEngine.eligibleFreezeTargets(state);
+        const card = state.lastCard;
         app.innerHTML = `
           ${pageHeader()}${scoreList()}
           <section class="panel" aria-labelledby="freeze-title">
             <h2 id="freeze-title" tabindex="-1" data-focus>Freeze-Ziel wählen</h2>
             <p class="status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(statusMessage('Freeze: Wähle eine Zielperson.'))}</p>
+            ${card ? `<ul class="cards" aria-label="Aufgedeckte Karte"><li class="card" aria-label="${escapeHtml(card.label || `Zahlenkarte ${card.value}`)}">${escapeHtml(card.label || card.value)}</li></ul>` : ''}
             <label for="freeze-target">Andere Person, deren aktuelle Rundenpunkte gesichert werden</label>
             <select id="freeze-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)} (${state.round.players[player.id].roundPoints} Punkte)</option>`).join('')}</select>
             <button id="confirm-freeze" type="button">Freeze ausführen</button>
@@ -449,6 +477,8 @@ if (typeof module !== 'undefined') {
 
       function render(moveFocus = true) {
         if (state.phase === 'setup') renderSetup();
+        else if (state.phase === 'initialDeal') renderInitialDeal();
+        else if (state.phase === 'initialReveal') renderInitialReveal();
         else if (state.phase === 'handoff') renderHandoff();
         else if (state.phase === 'turn') renderTurn();
         else if (state.phase === 'freezeTarget') renderFreezeTarget();
